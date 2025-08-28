@@ -54,7 +54,32 @@ async def main():
 
         await asyncio.sleep(2)
 
-        # Perform a "Move Forward" movement
+        # Perform "initialising"
+        #  will not move on first command, needs placeholder command to initialise movement
+        print("Initialising movement")
+        await conn.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["SPORT_MOD"], 
+            {
+                "api_id": SPORT_CMD["Move"],
+                "parameter": {"x": 1, "y": 0, "z": 0}
+            }
+        )
+
+        await asyncio.sleep(3)
+
+        # Perform a "Move Backward" movement
+        print("Moving backward...")
+        await conn.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["SPORT_MOD"], 
+            {
+                "api_id": SPORT_CMD["Move"],
+                "parameter": {"x": -1, "y": 0, "z": 0}
+            }
+        )
+
+        await asyncio.sleep(3)
+
+        # Perform a "Move Backward" movement
         print("Moving forward...")
         await conn.datachannel.pub_sub.publish_request_new(
             RTC_TOPIC["SPORT_MOD"], 
@@ -63,88 +88,7 @@ async def main():
                 "parameter": {"x": 1, "y": 0, "z": 0}
             }
         )
-
-        await asyncio.sleep(3)
-
-        # Perform a "Move Backward" movement
-        print("Moving backward...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], 
-            {
-                "api_id": SPORT_CMD["Move"],
-                "parameter": {"x": 1, "y": 0, "z": 0}
-            }
-        )
-        await asyncio.sleep(3)
-
-
-        # Perform a "Move Backward" movement
-        print("Moving backward...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], 
-            {
-                "api_id": SPORT_CMD["Move"],
-                "parameter": {"x": 1, "y": 1, "z": 0}
-            }
-        )
-        await asyncio.sleep(3)
-                # Perform a "Move Backward" movement
-        print("Moving backward...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], 
-            {
-                "api_id": SPORT_CMD["Move"],
-                "parameter": {"x": -1, "y": 0, "z": -1}
-            }
-        )
-
-        await asyncio.sleep(3)
-
-        ####### AI MODE ########
-
-        # Switch to AI mode
-        print("Switching motion mode to 'AI'...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["MOTION_SWITCHER"], 
-            {
-                "api_id": 1002,
-                "parameter": {"name": "ai"}
-            }
-        )
-        await asyncio.sleep(10)
-
-        # Switch to Handstand Mode
-        print("Switching to Handstand Mode...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], 
-            {
-                "api_id": SPORT_CMD["StandOut"],
-                "parameter": {"data": True}
-            }
-        )
-
-        await asyncio.sleep(5)
-
-        # Switch back to StandUp Mode
-        print("Switching back to StandUp Mode...")
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], 
-            {
-                "api_id": SPORT_CMD["StandOut"],
-                "parameter": {"data": False}
-            }
-        )
-
-        # await asyncio.sleep(5)
-        # Perform a backflip
-        # print(f"Performing BackFlip")
-        # await conn.datachannel.pub_sub.publish_request_new(
-        #     RTC_TOPIC["SPORT_MOD"], 
-        #     {
-        #         "api_id": SPORT_CMD["BackFlip"],
-        #         "parameter": {"data": True}
-        #     }
-        # )
+        
 
         # Keep the program running for a while
         await asyncio.sleep(3600)

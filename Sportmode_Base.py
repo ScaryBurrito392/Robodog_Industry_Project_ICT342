@@ -79,7 +79,7 @@ async def main():
 
         await asyncio.sleep(3)
 
-        # Perform a "Move Backward" movement
+        # Perform a "Move Forward" movement
         print("Moving forward...")
         await conn.datachannel.pub_sub.publish_request_new(
             RTC_TOPIC["SPORT_MOD"], 
@@ -89,6 +89,20 @@ async def main():
             }
         )
         
+        await asyncio.sleep(3)
+
+        # Perform a "rotate" movement
+        # positive = turn left, negative = turn right
+        # 1.5 = 90 degree turn
+        # 6 = 180
+        print("turning")
+        await conn.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["SPORT_MOD"], 
+            {
+                "api_id": SPORT_CMD["Move"],
+                "parameter": {"x": 0, "y": 0, "z": 6}
+            }
+        )
 
         # Keep the program running for a while
         await asyncio.sleep(3600)

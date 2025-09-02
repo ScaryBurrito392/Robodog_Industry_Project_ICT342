@@ -112,6 +112,7 @@ async def main():
                 "parameter": {"x": 0.5, "y": 0, "z": 0}
             }
         )
+
         await asyncio.sleep(2)
 
         await conn.datachannel.pub_sub.publish_request_new(

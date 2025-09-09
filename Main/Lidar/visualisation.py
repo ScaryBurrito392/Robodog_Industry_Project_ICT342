@@ -4,7 +4,7 @@
 import cv2
 import asyncio
 import numpy as np
-from Main.Lidar.occupancy_map import get_occupancy_grid_copy
+from .occupancy_map import get_occupancy_grid_copy
 
 UPDATE_INTERVAL_MS = 100
 

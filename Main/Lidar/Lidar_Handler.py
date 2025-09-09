@@ -5,7 +5,7 @@ import asyncio
 import logging
 import numpy as np
 from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
-from Main.Lidar.occupancy_map import update_occupancy_grid
+from .occupancy_map import update_occupancy_grid
 
 LIDAR_TOPIC = "rt/utlidar/voxel_map_compressed"
 ROBOT_IP = "192.168.12.1"

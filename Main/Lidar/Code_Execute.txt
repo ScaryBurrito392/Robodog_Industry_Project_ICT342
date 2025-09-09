@@ -1,0 +1,8 @@
+'''
+remember to save all files before running
+
+#run the following in new terminal to execute code:
+cd C:\Users\Theunis\go2_webrtc_connect
+& .\.venv\Scripts\Activate.ps1
+python -m Main.Lidar.Main
+'''

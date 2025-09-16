@@ -6,7 +6,7 @@
 When you don’t have access to the robot, you can still test the mapping stack end-to-end.
 Main/Lidar/sim_lidar.py fakes the data-channel by generating synthetic point clouds (walls + a moving pillar) and pushing them through the exact same function your real frames use: Lidar_Handler.process_lidar(...).
 
-Why use it
+### Why use it
 
 No hardware required; develop anywhere.
 

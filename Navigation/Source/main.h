@@ -14,7 +14,6 @@
 #include <queue>
 #include <vector>
 # include <utility>
-#include <hash_map>
 #include <unordered_map>
 // #include <pybind11/pybind11.h>
 // namespace py = pybind11;
@@ -112,13 +111,13 @@ namespace GoDog {
 
         [[nodiscard]] double getRHS() const;
 
-        bool setObstacle(bool obstacle) const;
+        [[nodiscard]] bool setObstacle(bool obstacle) const;
 
         [[nodiscard]] bool isObstacle() const;
 
         [[nodiscard]] bool isSourceObstacle() const;
 
-        bool setSourceObstacle(bool sourceObstacle) const;
+        [[nodiscard]] bool setSourceObstacle(bool sourceObstacle) const;
 
         [[nodiscard]] int getX() const;
 
@@ -197,7 +196,7 @@ namespace GoDog {
         std::vector<std::pair<int, int>> setObstacle(int x, int y, bool isObstacle, std::vector<std::pair<int, int>>& changedSquares);
 
         /**
-         * Determines the start position of the entity and the end goal position based on therelative position
+         * Determines the start position of the entity and the end goal position based on the relative position
          * between the entity and the goal
          * @param endRelativeX the x position of the end relative to the start
          * @param endRelativeY the y position of the end relative to the start
@@ -241,6 +240,8 @@ namespace GoDog {
          * @param furthest_accessed the highest coordinated value from the attempted access
          */
         void checkSize(int furthest_accessed);
+
+        [[nodiscard]] bool safeObstacle(const std::pair<int, int> &obstaclePosition) const;
 
 
         /**
@@ -288,7 +289,7 @@ namespace GoDog {
         /**
          * Prints out the entire grid
          */
-        void coutGrid();
+        void coutGrid() const;
 
         /**
          * Updates the keys of a node using data from the grid
@@ -576,6 +577,8 @@ namespace GoDog {
          * @return the whole path from the given coordinates to the goal
          */
         std::vector<std::pair<int, int>> getWholePath(int x, int y);
+
+        void coutGrid();
     };
 
 
@@ -644,5 +647,7 @@ namespace GoDog {
          * @return a MovementVector of the next movement the entity should take
          */
         MovementVector getNextMovement(int entityX, int entityY, double angleAdjustment = 0);
+
+        void coutGrid();
     };
 }

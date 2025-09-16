@@ -1,4 +1,4 @@
-# Robodog_Industry_Project_ICT342
+# Robodog_Industry_Project_ICT342 README
 
 
 ## LIDAR Simulator (sim_lidar.py)

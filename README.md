@@ -1,4 +1,4 @@
-### Robodog_Industry_Project_ICT342
+# Robodog_Industry_Project_ICT342
 
 
 ## LIDAR Simulator (sim_lidar.py)
@@ -14,7 +14,7 @@ Exercises decoding → occupancy grid → visualisation without code changes.
 
 Deterministic scene with mild noise to resemble real scans.
 
-# How to run
+### How to run
 Let Main pick real vs sim
 
 Update Main/Lidar/Main.py to accept a --sim flag:
@@ -25,7 +25,7 @@ python -m Main.Lidar.Main --sim
 You should see the same OpenCV window, but this time Occupied px will tick up and you’ll see “walls” paint in—even with no dog connected.
 
 
-# How it works
+### How it works
 
 Emits messages shaped like the Go2 voxel topic:
 
@@ -35,13 +35,13 @@ plus origin, resolution, width fields to keep the pipeline happy
 
 Calls process_lidar(message) at ~10 Hz.
 
-# Customize
+### Customize
 
 Edit _make_room_pts(t) to change geometry (rooms, corridors, moving objects).
 
 Tweak noise level, frame rate (sleep), or map scale.
 
-# Troubleshooting
+### Troubleshooting
 
 Only a green square? Make sure you ran with --sim and the console prints SIM MODE.
 

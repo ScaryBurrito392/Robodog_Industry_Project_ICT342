@@ -79,17 +79,19 @@ class DataHolder:
     def __init__(self):
         self.q = queue.Queue(maxsize=1)
 
-    def get(self):  # blocks if empty
+    def get(self): #blocking if empty
         return self.q.get()
 
     def put(self, message):
-        # Remove old message if full
         if self.q.full():
             try:
                 self.q.get_nowait()
             except queue.Empty:
                 pass
-        self.q.put(message)
+        try:
+            self.q.put_nowait(message)
+        except queue.Full:
+            pass
 
 
 

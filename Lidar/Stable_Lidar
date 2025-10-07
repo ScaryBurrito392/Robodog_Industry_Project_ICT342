@@ -78,17 +78,18 @@ class ThreeDBitArray:
 class DataHolder:
     def __init__(self):
         self.q = queue.Queue(maxsize=1)
-        self.lock = threading.Lock()
 
-    def get(self): #blocking if empty
-        with self.lock:
-            return self.q.get()
+    def get(self):  # blocks if empty
+        return self.q.get()
 
     def put(self, message):
-        with self.lock:
-            if not self.q.empty():
-                self.q.get()
-            self.q.put(message)
+        # Remove old message if full
+        if self.q.full():
+            try:
+                self.q.get_nowait()
+            except queue.Empty:
+                pass
+        self.q.put(message)
 
 
 

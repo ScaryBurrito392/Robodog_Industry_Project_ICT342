@@ -2,7 +2,9 @@
 remember to save all files before running
 
 #run following in new terminal to set environment
-cd C:\Users\Theunis\go2_webrtc_connect
+#enter filepath for where go2_webrtc_connect is stored on YOUR computer. replace "..." with appropriate filepath
+
+cd C:\...\...\go2_webrtc_connect
 & .\.venv\Scripts\Activate.ps1
 
 #run the following in new terminal to execute code:
@@ -12,3 +14,4 @@ python -m Main.Lidar.Main
 #run following to execute code in sim mode
 python -m Main.Lidar.Main --sim
 '''
+

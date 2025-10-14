@@ -288,17 +288,6 @@ class PositionProcessor:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 class TwoDBitGrid:
     def __init__(self):
         self.grid = []
@@ -333,13 +322,16 @@ class TwoDBitGrid:
         return self.grid[i][j]
 
     def set_batch(self, batch: np.ndarray, value=True):
-        print(batch.shape)
+        #print(batch.shape)
         min_per_column = np.min(batch, axis=0)
+        #print(min_per_column)
         max_per_column = np.max(batch, axis=0)
+        #print(max_per_column)
         self.check_point(min_per_column[0], min_per_column[1])
         self.check_point(max_per_column[0], max_per_column[1])
         for position in batch:
             self.grid[int(position[0] + self.x_offset)][int(position[1] + self.y_offset)] = value
+            #print(self.grid[int(position[0] + self.x_offset)][int(position[1] + self.y_offset)])
 
     def within_range(self, offset_x, offset_y):
         return (self.x_size > offset_x >= 0) and (self.y_size > offset_y >= 0)
@@ -397,7 +389,7 @@ class TwoDBitGridHolder:
         return self.grid.get(x, y)
 
     def get_index(self, i, j):
-        self.grid.get_index(i, j)
+        return self.grid.get_index(i, j)
 
     def shape(self):
         return self.grid.shape()
@@ -410,6 +402,7 @@ class PointAccumulator:  # im assuming origin is np.array. Cant remember if true
         self.resolution = resolution
 
     def add_points(self, points, origin):  # assumes that frame is 2d
+
         origin_coordinates = np.floor(origin / self.resolution).astype(int)
         if self.relative_offset is None:
             self.relative_offset = origin_coordinates
@@ -556,7 +549,7 @@ def start_pygame_viewer(lidar_holder: DataHolder, pose_holder: DataHolder):
 
     entity = [250, 250]
     scale = 5
-    camera_x, camera_y = 240, 240
+    camera_x, camera_y = 0, 0
 
     running = True
     while running:
@@ -586,10 +579,13 @@ def start_pygame_viewer(lidar_holder: DataHolder, pose_holder: DataHolder):
 
         for x in range(grid.shape()[0]):
             for y in range(grid.shape()[1]):
+                #print(grid.get_index(x, y))
                 if grid.get_index(x, y):
                     sx = (x - camera_x) * scale
                     sy = (y - camera_y) * scale
+                    print(sx, sy, camera_x, camera_y, scale)
                     if 0 <= sx < 800 and 0 <= sy < 800:
+                        print("drawn")
                         pygame.draw.rect(screen, (200, 200, 200), (sx, sy, scale, scale))
         pygame.draw.circle(screen, (255, 0, 0),
                            ((entity[0] - camera_x) * scale, (entity[1] - camera_y) * scale),

@@ -24,6 +24,8 @@ python -m Main.Lidar.Main --sim
 
 You should see the same OpenCV window, but this time Occupied px will tick up and you’ll see “walls” paint in—even with no dog connected.
 
+see Main/Lidar/code_execute.txt for exact commands to enter into your repo root in your coding environment
+
 
 ### How it works
 

@@ -1,4 +1,4 @@
-# Main/Lidar/sim_lidar.py
+# sim_lidar.py
 # simulated lidar environment readings from dog
 import asyncio
 import numpy as np

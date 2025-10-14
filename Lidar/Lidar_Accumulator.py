@@ -2,7 +2,11 @@
 import queue
 import threading
 import time
+from platform import processor
 
+from numpy.version import full_version
+
+from Clean_Lidar_Handler import PoseProcessor
 from go2_webrtc_driver.constants import RTC_TOPIC, SPORT_CMD
 
 """ 25/09/2025 """
@@ -11,7 +15,7 @@ from go2_webrtc_driver.constants import RTC_TOPIC, SPORT_CMD
 import asyncio
 import logging
 import numpy as np
-#import pyvista as pv
+# import pyvista as pv
 from bitarray import bitarray
 from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
 from scipy.spatial.transform import Rotation as R
@@ -30,7 +34,6 @@ yaw_starting_nanoseconds = -1
 starting_yaw = None
 yaw_drift = None
 YAW_DRIFT_CALCULATION_SECONDS = 20.0
-
 
 
 # this is just 3d bit array used for later clustering functions
@@ -80,7 +83,7 @@ class DataHolder:
     def __init__(self):
         self.q = queue.Queue(maxsize=1)
 
-    def get(self): #blocking if empty
+    def get(self):  # blocking if empty
         return self.q.get()
 
     def put(self, message):
@@ -96,13 +99,18 @@ class DataHolder:
 
 
 
-class LidarProcessor:
-    def __init__(self, lidar_holder : DataHolder, min_z = 0, max_z = 38, z_processing_padding = 2, min_cluster_size = 4):
+class PositionProcessor:
+    def __init__(self, lidar_holder: DataHolder, pose_holder: DataHolder, min_z=0, max_z=38, z_processing_padding=2,
+                 min_cluster_size=4):
+        self.pose_holder = pose_holder
+        self.lidar_holder = lidar_holder
+        self.yaw = 0
+        self.relative_position = None
+        self.absolute_position = None
         self.min_z = min_z
         self.max_z = max_z
         self.z_processing_padding = z_processing_padding
         self.min_cluster_size = min_cluster_size
-        self.lidar_holder = lidar_holder
         self.origin = None
         self.points = None
 
@@ -110,7 +118,14 @@ class LidarProcessor:
         message = self.lidar_holder.get()
         self.origin = message["data"].get("origin", [])
         positions = message["data"]["data"].get("positions", [])
-        self.points = np.unique(np.array([positions[i:i + 3] for i in range(0, len(positions), 3)], dtype=np.float32), axis=0)
+        self.points = np.unique(np.array([positions[i:i + 3] for i in range(0, len(positions), 3)], dtype=np.float32),
+                                axis=0)
+        pose_message = self.pose_holder.get()
+        origin = self.lidar_holder.get()["data"].get("origin", [])
+        self.yaw = self.get_state_from_quaternion(*self.get_orientation_from_message(pose_message))[2]
+        self.relative_position = self.get_dog_relative_coordinates(self.get_position_from_message(pose_message), origin)
+        self.absolute_position = self.get_position_from_message(pose_message) / RESOLUTION
+
 
     def get_origin(self):
         return self.origin
@@ -121,8 +136,12 @@ class LidarProcessor:
     def _set_points(self, points):
         self.points = points
 
+    def compress_z(self):
+        self.points = PositionProcessor.compress_z_points(self.points)
 
-    def filter_point_zs(self, pre_processing = False):
+
+
+    def filter_point_zs(self, pre_processing=False):
         min_z = self.min_z
         max_z = self.max_z
         if pre_processing:
@@ -139,7 +158,7 @@ class LidarProcessor:
     def enforce_minimum_cluster_size(self):
         min_processing_z = min(self.min_z - self.z_processing_padding, 0)
         points = self.get_points()
-        clusters = LidarProcessor.cluster_maker(points, min_processing_z, self.max_z)
+        clusters = PositionProcessor.cluster_maker(points, min_processing_z, self.max_z)
         valid_points = []
         for cluster in clusters:
             if len(cluster) >= self.min_cluster_size:
@@ -147,9 +166,15 @@ class LidarProcessor:
         self._set_points(np.array(valid_points))
         return self
 
+    @staticmethod
+    def compress_z_points(points): #this alters entered points, because in current use cases, do not require old points, and compy is inefficient
+        points[:, 2] = 0
+        return np.unique(points, axis=0)
+
     # turns points into clusters, where a cluster includes all points that are connected directly or by other points
     @staticmethod
-    def cluster_maker(points, min_z=0, max_z=LIDAR_Z_MAX):  # not that this will adjust z values to go up from zero if not already
+    def cluster_maker(points, min_z=0,
+                      max_z=LIDAR_Z_MAX):  # not that this will adjust z values to go up from zero if not already
         # min_z will act as offset
         print("start")
         z_size = max_z - min_z + 1  # +1 to include max_z
@@ -164,7 +189,7 @@ class LidarProcessor:
                                 point[
                                     2] - min_z)))  # z of points inside q are now adjusted, don't need to be handled again
                 grid.set(False, point[0], point[1], point[2] - min_z)
-                clusters.append(LidarProcessor.process_cluster(grid, q))
+                clusters.append(PositionProcessor.process_cluster(grid, q))
         print("end")
         return clusters
 
@@ -182,29 +207,23 @@ class LidarProcessor:
         return cluster
 
 
-class PoseProcessor:
-    def __init__(self, pose_holder : DataHolder, lidar_holder : DataHolder):
-        self.pose_holder = pose_holder
-        self.lidar_holder = lidar_holder
-        self.yaw = 0
-        self.relative_position = None
-        self.absolute_position = None
+    def get_yaw(self, degrees = True):
+        if degrees:
+            return self.yaw
+        else:
+            return PositionProcessor.get_radians_from_degrees(self.yaw)
 
-    def update_message(self):
-        pose_message = self.pose_holder.get()
-        origin = self.lidar_holder.get()["data"].get("origin", [])
-        self.yaw = self.get_state_from_quaternion(*self.get_orientation_from_message(pose_message))[2]
-        self.relative_position = self.get_dog_relative_coordinates(self.get_position_from_message(pose_message), origin)
-        self.absolute_position = self.get_position_from_message(pose_message) / RESOLUTION
 
-    def get_yaw(self):
-        return self.yaw
 
     def get_relative_position(self):
         return self.relative_position
 
     def get_position_from(self, point):
         return self.absolute_position - point
+
+    @staticmethod
+    def get_radians_from_degrees(degrees):
+        return degrees * np.pi / 180
 
     @staticmethod
     def get_orientation_from_message(message):
@@ -214,7 +233,7 @@ class PoseProcessor:
     @staticmethod
     def get_position_from_message(message):
         position = message["data"]["pose"]["position"]
-        return np.array((position["x"], position["y"], position["z"]),)
+        return np.array((position["x"], position["y"], position["z"]), )
 
     @staticmethod
     def get_state_from_quaternion(x, y, z, w):
@@ -224,9 +243,58 @@ class PoseProcessor:
     @staticmethod
     def get_dog_relative_coordinates(position, origin):
         global RESOLUTION
-        coordinates = np.zeros(3)
-        coordinates = np.floor((position - origin) / RESOLUTION).astype(int) # todo check if this works. Maybe are not all np
+        coordinates = np.floor((position - origin) / RESOLUTION).astype(
+            int)  # todo check if this works. Maybe are not all np
         return coordinates
+
+    def get_yaw_full_rotation(self, degrees = True, reverse_direction = True):
+        if degrees:
+            full_rotation = 360
+        else:
+            full_rotation = 2 * np.pi
+        unscaled_yaw = self.get_yaw(degrees)
+        if reverse_direction:
+            unscaled_yaw *= -1
+        if unscaled_yaw < 0:
+            unscaled_yaw = unscaled_yaw + full_rotation
+        return unscaled_yaw
+
+
+
+    def voxel_to_2d_raw(self, scan_count):
+        points_relative = PositionProcessor.compress_z_points(self.points - self.relative_position) #this should center the points around the dog
+
+        distances = np.linalg.norm(points_relative, axis=1) #gets the distance from scanner for each point
+        azimuths = np.arctan2(points_relative[:, 1], points_relative[:, 0])  # angle in radians of each point
+
+        full_rotation = np.pi * 2
+
+        unscaled_yaw = self.get_yaw_full_rotation(False) # gets the yaw from 0 - 360 going clockwise
+
+        azimuths -= unscaled_yaw #this adjusts azimuths so that 0 is forward relative to the dog
+        azimuths %= full_rotation # clips to a full rotation
+
+        scan_distances = np.full((scan_count,), 1e6) # this will hold the scan distances for each small rotation of scanner
+        divide_value = float(scan_count) / full_rotation
+        scan_indices = np.floor((azimuths * divide_value)) % scan_count# make azimuth angles as a fraction of scan count rather than 2 pi
+        stacked = np.column_stack((distances, scan_indices)) # combines distances and scan_indices
+        arr_sorted = stacked[np.lexsort((stacked[:,0], stacked[:,1]))] # sorts indices ascending, then distances ascending
+        _, unique_indices = np.unique(arr_sorted[:, 1], return_index=True) # gives the first index of each occurence of the scan index, which has the lowest distance for that index
+        scan_distances[arr_sorted[unique_indices, 1].astype(int)] = arr_sorted[unique_indices, 0] #for each of the indices with the lowest distance, puts the distance associated into scan distances
+        return scan_distances
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -240,42 +308,38 @@ class TwoDBitGrid:
         self.y_offset = 0
         self.resize_scale = 1.5
 
-
-    def set(self, x, y, value = True):
+    def set(self, x, y, value=True):
         offset_x = x + self.x_offset
         offset_y = y + self.y_offset
         if not self.within_range(offset_x, offset_y):
             if not value:
                 return
             self.check_point(x, y)
-            offset_x = x + self.x_offset
-            offset_y = y + self.y_offset
-        #print(f"setting actual index {offset_x}, {offset_y}")
+            offset_x = int(x + self.x_offset)
+            offset_y = int(y + self.y_offset)
+        # print(f"setting actual index {offset_x}, {offset_y}")
         self.grid[offset_x][offset_y] = value
 
     def get(self, x, y):
         offset_x = x + self.x_offset
         offset_y = y + self.y_offset
-        #print(f"getting actual index {offset_x}, {offset_y}")
+        # print(f"getting actual index {offset_x}, {offset_y}")
         if self.within_range(offset_x, offset_y):
             return self.grid[offset_x][offset_y]
-        #print("not in range")
+        # print("not in range")
         return 0
 
     def get_index(self, i, j):
         return self.grid[i][j]
 
-
-    def set_batch(self, batch: np.ndarray, value = True):
+    def set_batch(self, batch: np.ndarray, value=True):
         print(batch.shape)
         min_per_column = np.min(batch, axis=0)
         max_per_column = np.max(batch, axis=0)
         self.check_point(min_per_column[0], min_per_column[1])
         self.check_point(max_per_column[0], max_per_column[1])
         for position in batch:
-            self.grid[position[0] + self.x_offset][position[1] + self.y_offset] = value
-
-
+            self.grid[int(position[0] + self.x_offset)][int(position[1] + self.y_offset)] = value
 
     def within_range(self, offset_x, offset_y):
         return (self.x_size > offset_x >= 0) and (self.y_size > offset_y >= 0)
@@ -339,15 +403,13 @@ class TwoDBitGridHolder:
         return self.grid.shape()
 
 
-
-
-class PointAccumulator: #im assuming origin is np.array. Cant remember if true
-    def __init__(self, resolution = 0.05):
+class PointAccumulator:  # im assuming origin is np.array. Cant remember if true
+    def __init__(self, resolution=0.05):
         self.grid = TwoDBitGrid()
         self.relative_offset = None
         self.resolution = resolution
 
-    def add_points(self, points, origin): #assumes that frame is 2d
+    def add_points(self, points, origin):  # assumes that frame is 2d
         origin_coordinates = np.floor(origin / self.resolution).astype(int)
         if self.relative_offset is None:
             self.relative_offset = origin_coordinates
@@ -360,10 +422,6 @@ class PointAccumulator: #im assuming origin is np.array. Cant remember if true
 
     def get_relative_offset(self):
         return self.relative_offset
-
-
-
-
 
 
 async def lidar_webrtc_connection(lidar_holder, pose_holder):
@@ -394,19 +452,17 @@ async def lidar_webrtc_connection(lidar_holder, pose_holder):
             conn.datachannel.pub_sub.publish_without_callback("rt/utlidar/switch", "on")
 
             async def pose_callback_task(message):
-                print("updating pose")
+                #print("updating pose")
                 pose_holder.put(message)
 
             async def lidar_callback_task(message):
-                print("updating_lidar")
-                """Task to process incoming LIDAR data."""
+                #print("updating_lidar")
                 lidar_holder.put(message)
-
 
             # Subscribe to LIDAR voxel map messages
             conn.datachannel.pub_sub.subscribe(
                 "rt/utlidar/voxel_map_compressed",
-                lambda message: asyncio.create_task(lidar_callback_task(message)) #
+                lambda message: asyncio.create_task(lidar_callback_task(message))  #
                 # lambda message : asyncio.create_task(pass_callback_task(message))
                 # lambda message: asyncio.create_task(update_origin(message))
             )
@@ -437,7 +493,6 @@ async def lidar_webrtc_connection(lidar_holder, pose_holder):
             await asyncio.sleep(reconnect_interval)
 
 
-
 # we will need to somehow calculate drift if the lidar frame does not drift also
 # should calculate the amount of drift per second that the sensor has. Not 100% on how consistent the drift is, but if it is consistent, we could counteract it.
 # Could be used in conjunction with resetting the connection periodically to reset the drift
@@ -452,7 +507,6 @@ def calculate_yaw_drift(message):
             yaw_starting_seconds + YAW_DRIFT_CALCULATION_SECONDS):  # this is accessible. IDE might say its not
         yaw_drift_calculated = True
         yaw_drift = double(get_orientation_from_message(message)[2] - starting_yaw) / YAW_DRIFT_CALCULATION_SECONDS
-
 
 
 # prints 2d map on console
@@ -482,7 +536,7 @@ def filter_point_zs(points, min_z, max_z):
     return np.array(filtered_points)
 
 
-#gives static 3d image of lidar scan. Couldn't get it to dynamically update
+# gives static 3d image of lidar scan. Couldn't get it to dynamically update
 def display_values(points, dog_position):
     cloud = pv.PolyData(points)
     plotter = pv.Plotter()
@@ -491,10 +545,9 @@ def display_values(points, dog_position):
     plotter.show()
 
 
-
 def start_pygame_viewer(lidar_holder: DataHolder, pose_holder: DataHolder):
-    lidar_processor = LidarProcessor(lidar_holder, 10, 25, 2, 6)
-    pose_processor = PoseProcessor(pose_holder, lidar_holder)
+    print("pygame")
+    processor = PositionProcessor(lidar_holder, pose_holder)
     accumulator = PointAccumulator()
     grid = accumulator.get_map()
     pygame.init()
@@ -521,14 +574,15 @@ def start_pygame_viewer(lidar_holder: DataHolder, pose_holder: DataHolder):
         if keys[pygame.K_a]: camera_x -= 5
         if keys[pygame.K_d]: camera_x += 5
 
-
-        lidar_processor.update_message()
-        pose_processor.update_message()
-        accumulator.add_points(lidar_processor.filter_point_zs(False).get_points(), lidar_processor.get_origin())
-        ent_pos = pose_processor.get_position_from(accumulator.get_relative_offset()) #im thinking this will give the dog's position on the grid
+        processor.update_message()
+        accumulator.add_points(processor.filter_point_zs(False).get_points(), np.array(processor.get_origin()))
+        ent_pos = processor.get_position_from(
+            accumulator.get_relative_offset())  # im thinking this will give the dog's position on the grid
         entity[0] = ent_pos[0]
         entity[1] = ent_pos[1]
         screen.fill((0, 0, 0))
+        grid = accumulator.get_map()
+        print (grid.shape())
 
         for x in range(grid.shape()[0]):
             for y in range(grid.shape()[1]):
@@ -542,8 +596,7 @@ def start_pygame_viewer(lidar_holder: DataHolder, pose_holder: DataHolder):
                            max(2.0, scale / 2))
 
         pygame.display.flip()
-        clock.tick(30)
-
+        clock.tick(1)
 
 
 def start_webrtc(lidar_holder, pose_holder):
@@ -554,28 +607,26 @@ def start_webrtc(lidar_holder, pose_holder):
 
 
 async def launch_connection(lidar_holder, pose_holder):
-    webrtc_thread = threading.Thread(target=start_webrtc, daemon=True, args= (lidar_holder, pose_holder))
+    webrtc_thread = threading.Thread(target=start_webrtc, daemon=True, args=(lidar_holder, pose_holder))
     webrtc_thread.start()
     await asyncio.sleep(1000)
 
 
 async def handle_messages(lidar_holder, pose_holder):
-    lidar_processor = LidarProcessor(lidar_holder, 10, 25, 2, 6)
-    pose_processor = PoseProcessor(pose_holder, lidar_holder)
+    processor = PositionProcessor(lidar_holder, pose_holder)
     while True:
-        lidar_processor.update_message()
-        pose_processor.update_message()
-        filtered_points = lidar_processor.filter_point_zs(True).enforce_minimum_cluster_size().filter_point_zs(False)
-        display_values(filtered_points, pose_processor.get_relative_position())
+        processor.update_message()
+        filtered_points = processor.filter_point_zs(True).enforce_minimum_cluster_size().filter_point_zs(False)
+        display_values(filtered_points, processor.get_relative_position())
+
 
 def main():
     lidar_holder = DataHolder()
     pose_holder = DataHolder()
-    handling_data = threading.Thread(target=start_pygame_viewer, daemon=True, args = (lidar_holder, pose_holder))
+    handling_data = threading.Thread(target=start_pygame_viewer, daemon=True, args=(lidar_holder, pose_holder))
     handling_data.start()
     asyncio.run(launch_connection(lidar_holder, pose_holder))
 
 
 if __name__ == "__main__":
     main()
-
